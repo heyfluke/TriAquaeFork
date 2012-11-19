@@ -1,0 +1,280 @@
+#!/usr/bin/python
+import sys
+sys.path.append('%s/conf' % WorkDir)
+import global_env
+import headline
+import encrypt
+if encrypt.Decrypt() == 'Right':
+	print 'dd'
+LogDir='%s/logs' % WorkDir
+SysAnalyzer = '%s/include/SysAnalyzer.py' % WorkDir
+import os,SubMenu,user_startup,time
+import thread_ssh,Integrate_log
+import PassComplex
+import runShellCmd
+#os.system('clear')
+date=time.strftime('%Y_%m_%d_%H_%M')
+
+RecordLog=global_env.g_env()
+while True:
+	try:
+		import serverList
+		A = serverList.Group()
+		A.ListGroup(1,0,0)
+		GroupNum =  A.ListGroup(0,0,1)
+		Option = raw_input('Please choose the group you want to manageing[Type q to exit]: ')
+		if Option == 'q':
+			encrypt.MD5Check()
+			print '\nExit TriAquae.'
+			RecordLog.op_log('\033[36;1mExit TriAquae.\033[0m')
+			sys.exit()
+		#if Option == '\n':continue
+		#elif len(Option) == 0  :continue
+		elif int(Option) <  GroupNum: #If user choose group list
+			A.ChooseGroup(Option,0)
+			#print A.ListGroup(1,0,0)
+			Sub = SubMenu.SubMenu()
+			Sub.ShowMenu()
+			Console2 = raw_input('[Please choose an option to proceed-->#]:')
+			Console = int(Console2)
+			if Console == 1:
+				print '\033[36;1mCommand excution--------->be careful,command you input will be run on all the servers!\033[0m'
+				GroupName = A.ChooseGroup(Option,1)
+				RunCmd = thread_ssh.CmdBind()
+				RunCmd.CmdExcution(0,1,GroupName)  # Excute command on remoter servers
+			elif Console == 2:
+				Sub.ListMenu(2)
+			elif Console == 3:
+				Sub.ListMenu(3)
+				Console = int(raw_input('[Please choose an option to proceed-->#]:'))
+				'''File Transmission.'''
+				if Console == 1:
+					print 'sending file'
+					print 	'''Only file can be transported,not directory.'''
+				
+                                	loadSuccess = False;
+                                	while not loadSuccess:
+                                       		try:
+                                               		Local_file =raw_input( 'Type "shell" to search file in shell mode\nInput local file:')
+							if Local_file == 'shell':runShellCmd.userInput()
+							f = file(Local_file)
+                                               		loadSuccess =True;
+                                       		except IOError:
+                                               		print "\033[31;40;1mError:No such file\033[0m\n"
+					while True:
+						Remote_file = raw_input('\nInput remote file\n\033[36;1m[must be full path,such as /remotePath/remoteFilename]\033[0m:')
+						if len(Remote_file)==0:
+							print 'You must specify a remote file name to save the file on the remote client.\n'
+							continue
+						else:break
+					
+					GroupName = A.ChooseGroup(Option,1)
+					print GroupName,'File will be sent to all the servers in this group'
+					SendFile = thread_ssh.CmdBind()
+					SendFile.Run_FileTransfer(Local_file,Remote_file,GroupName,0)
+					#except:print 'wrong'
+				elif Console == 2:
+					'''Get file from client'''
+                                        print   '''Only file can be transported,not directory.'''
+					Remote_file = raw_input('\nInput remote file:')
+                                        Local_file =raw_input( 'Input local file:')
+                                        GroupName = A.ChooseGroup(Option,1)
+                                        print '----------------------',GroupName
+                                        SendFile = thread_ssh.CmdBind()
+                                        SendFile.Run_FileTransfer(Local_file,Remote_file,GroupName,1)
+
+	
+			elif Console == 4:
+				'system management'
+				Sub.ListMenu(4)
+				SubConsole = int(raw_input('[Please choose an option to proceed-->#]:'))
+				if SubConsole == 1:
+					print 'Collect system running status'
+					
+                                        GroupName = A.ChooseGroup(Option,1)
+                                        SendScript = thread_ssh.CmdBind()
+					System_status_collector='%s/scripts/System_status_collector.sh' % WorkDir
+                                        SendScript.Run_FileTransfer(System_status_collector,'/tmp/System_status_collector.sh',GroupName,0)
+					time.sleep(5)
+					SendScript.Run_Scripts(GroupName,'sh /tmp/System_status_collector.sh >  /tmp/system_status.log &')
+					print '''\033[32;40;1mGetting the result back ,this may take a few minutes....Do not interupt...\033[0m'''
+					time.sleep(45)
+					System_status_log='%s/system_runing_status.log'	% LogDir
+					SendScript.Run_FileTransfer(System_status_log,'/tmp/system_status.log',GroupName,1)
+					option = raw_input('\n\033[33;40;1mDo you want to display the logs?(y/n)\033[0m')
+					if option == 'y':
+						#collect('../logs/','system_runing','../logs/All_runing_status')
+						
+						All_Status_Log = '%s/All_system_running_status.log_%s' %(LogDir,date)
+						Integrate_log.collect(LogDir,'system_runing_status.log',All_Status_Log)
+						Integrate_log.show_file(All_Status_Log)
+				elif SubConsole == 2:
+					''' Collect system hardware information'''
+					print '\033[33;1mThis function should be ran by root or the user who has root permission!!!\n\033[0m[ Ctrl + c to stop ]  Start to run after 5 seconds!!!'
+					time.sleep(5)
+					GroupName = A.ChooseGroup(Option,1)
+					SendScript = thread_ssh.CmdBind()
+					Scripts='%s/scripts/hardware.sh' %WorkDir
+					SendScript.Run_FileTransfer(Scripts,'/tmp/hardware.sh',GroupName,0)
+					time.sleep(5)	
+					SendScript.Run_Scripts(GroupName,'sh /tmp/hardware.sh > /tmp/hardware.info &')
+					print '''\033[32;40;1mGetting the result back ,this may take a few minutes....Don't interrupt!!!\033[0m'''
+					time.sleep(15)
+					Scripts_log='%s/logs/system_info/hardware.info' % WorkDir
+					SendScript.Run_FileTransfer(Scripts_log,'/tmp/hardware.info',GroupName,1)
+				elif SubConsole == 5:
+					'''Change remote clients password'''		
+					print "\n\033[33;40;1mYou can change all the remote servers' password through this function\033[0m\n"
+					while True:
+						username=raw_input('Which user you want to change the password on remote server:')
+						if len(username) ==0:continue
+						NewPassword=PassComplex.Complex()	
+						option=raw_input("Are you sure that you want to change \033[33;40;1m%s's\033[0m password on all the servers?(y/n)" % username)
+						if option == 'y':
+							GroupName = A.ChooseGroup(Option,1)
+		                                        SendScript = thread_ssh.CmdBind()
+							PassChangeCmd= "echo '%s'|passwd %s --stdin" %(NewPassword,username)
+							SendScript.Run_Scripts(GroupName,PassChangeCmd)
+							msg='\033[33;40;1m---------------Password of %s on all the server in group %s have been changed\033[0m' %(username,GroupName)
+							RecordLog.op_log(msg)
+							
+							
+
+			elif Console == 5:
+				'''Client connection test'''
+				while True:
+					Sub.ListMenu(5)
+					Console = int(raw_input('[Please choose an option to proceed-->#]:'))
+					if Console == 1:
+						 GroupName = A.ChooseGroup(Option,1)
+	                                         SendScript = thread_ssh.CmdBind()
+                                        	 SendScript.Run_Scripts(GroupName,'echo -e "\033[32;40;1mConnecting test succeed!\033[1m"')
+			elif Console == 6:
+				print 'Install Apps....'
+				Sub.ListMenu(6)
+			elif Console == 7:continue
+				
+		elif int(Option) == GroupNum + 1:
+			#print 'Add/Delete Group'
+			print '''\n\t1. Add a new group\n\t2. Delete a group\n\t3. Modify current group name\n''' 
+			Console = int(raw_input('[Please choose an option to proceed-->#]:'))
+			if Console == 1:
+				AddName = raw_input('New group name:')
+				if len(AddName) > 0 and AddName !='' :
+					A.AddGroup(AddName)
+					#print '\n\033[31;40;1mRe-login to use the new Group list\033[0m\n'	
+			elif Console == 2:
+				while True:
+					DelName = raw_input('Input the full group name:')
+					if len(DelName) == 0:continue
+					A.DelGroup(DelName)
+					break	
+			elif Console == 3:
+				A.RenameGroup()	
+		elif int(Option) == GroupNum + 2:
+			print '''\n\t1. Add new server to group\n\t2. Delete server from group\n'''
+			Console = int(raw_input('[Please choose an option to proceed-->#]:'))	
+			if Console ==1:
+				A.ServerManage('Add')
+			elif Console == 2:
+				A.ServerManage('Del')	
+			#Sub.ListMenu()
+		elif int(Option) == GroupNum + 3:
+			print '''\n\t1. Upload new server list.'''
+			print '\nFind example file at: \n%s/conf/group_example.conf for guidence\n' %WorkDir
+			Console = int(raw_input('[Please choose an option to proceed-->#]:'))
+			if Console == 1:
+				#check the server list
+				ValidList = False
+				while not ValidList:
+					InputServerList = raw_input('\nType "shell" to find file in shell mode\nInput your server list file:')
+					if InputServerList == 'shell':
+						runShellCmd.userInput()
+						
+					try:
+						F=file(InputServerList)
+						ServerListFormatCorrect = True
+						while True:
+							line = F.readline()
+							if len(line) == 0:break
+							if line.startswith('#') is True:continue
+							if line.startswith(' ') is True:
+								print '\033[31;40;1mIndent Error: no space can exist before line: %s,pleae check.\nExit Program.\033[0m' %line 
+								#sys.exit()
+								ServerListFormatCorrect = False 
+								break	
+								
+							if line.startswith('\n') is True:
+								print '\033[31;40;1mIndent Error: no space can exist before a new line,pleae check.\nExit Program.\033[0m'
+                                                                #sys.exit()
+								ServerListFormatCorrect = False
+								break	
+
+							try:
+								ip = line.split()[0]
+								username= line.split()[1]
+								password = line.split()[2]
+							except IndexError:
+								print '\033[31;40;1mError: No username or password has been set for: %s,please check again.\nExit program.\033[0m' % ip
+								sys.exit()	
+							if len(line) == 0:
+								print 'Done'
+						break # if file exist , break the loop
+					except IOError:
+						print '\033[31;40;1mError: server list not exist,please check again.\033[0m'
+						continue
+					ValidList = True
+				# check the group name which user inputted
+				while True:
+					if ServerListFormatCorrect is not True:break #Server list check didn't pass ,break the loop
+					try:
+						InputGroupName = raw_input('Input group name which you want to save the new server list:')
+						GroupName = '%s/%s' %(serverList.GroupDir,InputGroupName)
+						ShowGroupList=file(GroupName)
+						break
+					except IOError:
+						print "\033[31;40;1mNo group name matchs '%s',please check again.\033[0m" % InputGroupName
+						continue
+						
+				#check the upload option
+				while True:
+					try:
+						ShowGroupList=file(GroupName)
+						msg='''\n\033[32;40;1mGroup %s\033[0m maybe contains servers,do you want to replace it ?:
+\t1. Replace old list
+\t2. Do not replace , add new list after the old one
+\t3. Show the old server list\n
+Please input your option to proceed-->:''' % InputGroupName
+						UploadOption=int(raw_input(msg))
+						if UploadOption== 1:
+							A.UploadServerList(GroupName,InputServerList,'w')
+							RecordLog.op_log('Upload new server list to group %s, replaced exist server list' % InputGroupName)
+							break
+						elif UploadOption == 2:
+							A.UploadServerList(GroupName,InputServerList,'a')
+							RecordLog.op_log('Appended new server list to group %s' % InputGroupName)
+						elif UploadOption == 3:
+							print '\033[32;40;1m---------------------IP list in %s---------------------------------\033[0m'  %InputGroupName
+							while True:
+								line=ShowGroupList.readline()
+								if len(line)==0:break
+								print line.split()[0],line.split()[1]
+						ShowGroupList.close()			
+					except ValueError:
+						print  'You must choose an option.'
+						continue
+					except:
+						print 'Error: detected ,code Uploading_Server_List exit.'
+						break
+	except KeyError:
+		print '\033[33;40;1mWrong option!\033[0m '
+		sys.exit()
+	except KeyboardInterrupt:
+		print '\nForce exit.'
+		
+	except EOFError:
+		print '\nForce exit.'
+	except ValueError:
+		print '\033[33;40;1mWrong option!\033[0m '
+	except AttributeError:
+		print '\n\033[31;1mSome error happend,please send bug to triaquae@gmail.com for support!\033[0m'
